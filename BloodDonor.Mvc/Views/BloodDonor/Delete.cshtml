@@ -1,0 +1,86 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+
+@*
+
+PSEUDOCODE / PLAN (detailed):
+
+- Purpose: Render a delete confirmation page for a BloodDonor entity.
+- Assumptions:
+  - View receives a model instance representing the blood donor.
+  - Controller expects a POST to the "Delete" action (common pattern: GET shows confirmation, POST performs delete with [HttpPost, ActionName("Delete")] or a named Delete action).
+- Steps to implement:
+  1. Declare the view model type at the top (use project's model namespace). If the exact model differs, reflection is used below to be resilient.
+  2. If Model is null, show a user-friendly "Not found" message and a link back to the index.
+  3. If Model exists:
+     a. Display a heading and short description.
+     b. Show the model properties and values in a simple detail list.
+        - Use reflection to iterate public properties so the view works without enumerating exact property names.
+     c. Determine the identifier value to send back to the controller:
+        - Try common property names ("Id", "{ModelName}Id", or first property ending with "Id").
+        - Render a hidden input named "id" with that value (controller action can accept an "id" parameter).
+     d. Provide a POST form with:
+        - Anti-forgery token.
+        - Hidden id input.
+        - Confirm (Delete) button styled as danger.
+        - Cancel link back to "Index".
+  4. Keep markup Razor-friendly and compatible with tag helpers.
+  5. Avoid strong assumptions about property names to reduce compile-time breakage.
+
+*@
+
+@using System
+@using System.Linq
+@model BloodDonorListViewModel
+
+@{
+    // Defensive: allow null model
+    var modelType = Model?.GetType();
+    // Find id property: "Id", "{ModelName}Id", or first ending with "Id"
+    var idProp = modelType == null ? null
+        : modelType.GetProperty("Id")
+        ?? modelType.GetProperty(modelType.Name + "Id")
+        ?? modelType.GetProperties().FirstOrDefault(p => p.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase));
+    var idValue = idProp == null ? null : idProp.GetValue(Model);
+}
+
+<h1>Delete Blood Donor</h1>
+
+@if (Model == null)
+{
+    <div class="alert alert-warning" role="alert">
+        The requested blood donor was not found.
+    </div>
+    <p>
+        <a asp-action="Index" class="btn btn-secondary">Back to list</a>
+    </p>
+}
+else
+{
+    <div class="mb-3">
+        <h4>Are you sure you want to delete this donor?</h4>
+        <p class="text-muted">This action cannot be undone.</p>
+    </div>
+
+    <dl class="row">
+        @if (modelType != null)
+        {
+            foreach (var prop in modelType.GetProperties())
+            {
+                var value = prop.GetValue(Model);
+                <dt class="col-sm-3">@prop.Name</dt>
+                <dd class="col-sm-9">@((value == null) ? "<em>null</em>" : Html.Raw(System.Net.WebUtility.HtmlEncode(value.ToString())))</dd>
+            }
+        }
+    </dl>
+
+    <form asp-action="DeleteConfirmed" method="post" class="mt-3">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@(idValue ?? String.Empty)" />
+        <button type="submit" class="btn btn-danger">Delete</button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">Cancel</a>
+    </form>
+}
